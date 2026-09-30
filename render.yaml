@@ -3,5 +3,5 @@ services:
     name: presentation-remote
     runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app
+    startCommand: gunicorn --threads 20 app:app
     plan: free
