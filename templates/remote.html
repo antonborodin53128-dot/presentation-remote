@@ -19,19 +19,28 @@
 <script>
 const el=document.getElementById("login"),ov=document.getElementById("overlay"),dot=document.getElementById("dot"),stateText=document.getElementById("stateText"),stateSub=document.getElementById("stateSub");
 el.value=localStorage.getItem("pptLogin")||"";
+let activeLogin=clean(el.value);
 function clean(v){return(v||"").trim().toLowerCase().replace(/[^a-zа-яё0-9_-]/gi,"").slice(0,40)}
 function settings(show){ov.classList.toggle("show",show);if(show)refreshState()}
-function saveLogin(){el.value=clean(el.value);if(el.value)localStorage.setItem("pptLogin",el.value);refreshState()}
-function resetLogin(){localStorage.removeItem("pptLogin");el.value="";refreshState()}
+function saveLogin(){
+  const login=clean(el.value); el.value=login;
+  if(!login)return;
+  activeLogin=login; localStorage.setItem("pptLogin",login);
+  remoteHeartbeat(); refreshState();
+}
+function resetLogin(){
+  activeLogin=""; localStorage.removeItem("pptLogin"); el.value="";
+  refreshState();
+}
 let lock=false;
-async function send(command){if(lock)return;const login=clean(el.value);if(!login){settings(true);return}lock=true;try{await fetch("/api/command",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({login,command})})}finally{setTimeout(()=>lock=false,120)}}
-async function refreshState(){const login=clean(el.value);if(!login){dot.className="dot";stateText.textContent="ПУЛЬТ НЕ ПОДКЛЮЧЕН";stateSub.textContent="Введите логин";return}try{const d=await(await fetch("/api/status?login="+encodeURIComponent(login),{cache:"no-store"})).json();const on=d.online>0;dot.className="dot"+(on?" on":"");stateText.textContent=on?"ПУЛЬТ ПОДКЛЮЧЕН":"ПУЛЬТ НЕ ПОДКЛЮЧЕН";stateSub.textContent=login.toUpperCase()+(on?" · устройств: "+d.online:" · ожидаем Windows-приложение")}catch(e){dot.className="dot";stateText.textContent="НЕТ СВЯЗИ С СЕРВЕРОМ";stateSub.textContent=login.toUpperCase()}}
+async function send(command){if(lock)return;const login=activeLogin;if(!login){settings(true);return}lock=true;try{await fetch("/api/command",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({login,command})})}finally{setTimeout(()=>lock=false,120)}}
+async function refreshState(){const login=activeLogin;if(!login){dot.className="dot";stateText.textContent="ПУЛЬТ НЕ ПОДКЛЮЧЕН";stateSub.textContent="Введите логин";return}try{const d=await(await fetch("/api/status?login="+encodeURIComponent(login),{cache:"no-store"})).json();const on=d.online>0;dot.className="dot"+(on?" on":"");stateText.textContent=on?"ПУЛЬТ ПОДКЛЮЧЕН":"ПУЛЬТ НЕ ПОДКЛЮЧЕН";stateSub.textContent=login.toUpperCase()+(on?" · устройств: "+d.online:" · ожидаем Windows-приложение")}catch(e){dot.className="dot";stateText.textContent="НЕТ СВЯЗИ С СЕРВЕРОМ";stateSub.textContent=login.toUpperCase()}}
 setInterval(refreshState,1200);refreshState();
 
 const remoteId=localStorage.getItem("pptRemoteId")||("web-"+Math.random().toString(36).slice(2)+Date.now().toString(36));
 localStorage.setItem("pptRemoteId",remoteId);
 async function remoteHeartbeat(){
-  const login=clean(el.value); if(!login)return;
+  const login=activeLogin; if(!login)return;
   try{await fetch("/api/remote-heartbeat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({login,remote_id:remoteId}),cache:"no-store"})}catch(e){}
 }
 setInterval(remoteHeartbeat,3000); remoteHeartbeat();
