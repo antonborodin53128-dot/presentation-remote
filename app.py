@@ -15,7 +15,7 @@ def clean_login(v):
                    if ch.isalnum() or ch in "_-")[:40]
 
 def room(login):
-    return ROOMS.setdefault(login,{"next_id":0,"devices":{}})
+    return ROOMS.setdefault(login,{"next_id":0,"devices":{},"remotes":{}})
 
 def online_devices(r):
     now=time.time()
@@ -89,6 +89,27 @@ def command():
     x=request.json or {}; login=clean_login(x.get("login")); cmd=str(x.get("command",""))
     if len(login)<2 or cmd not in ("next","prev"):return jsonify(ok=False),400
     return jsonify(ok=True,id=issue_command(login,cmd))
+
+@app.post("/api/remote-heartbeat")
+def remote_heartbeat():
+    x=request.json or {}
+    login=clean_login(x.get("login"))
+    rid=str(x.get("remote_id",""))[:100]
+    if len(login)<2 or not rid:return jsonify(ok=False),400
+    with LOCK:
+        room(login)["remotes"][rid]=time.time()
+    return jsonify(ok=True)
+
+@app.get("/api/remote-status")
+def remote_status():
+    login=clean_login(request.args.get("login"))
+    if len(login)<2:return jsonify(ok=True,online=0)
+    now=time.time()
+    with LOCK:
+        r=room(login)
+        r["remotes"]={k:v for k,v in r.get("remotes",{}).items() if now-float(v)<=60}
+        n=sum(1 for v in r["remotes"].values() if now-float(v)<=12)
+    return jsonify(ok=True,online=n)
 
 @app.get("/api/status")
 def status():
