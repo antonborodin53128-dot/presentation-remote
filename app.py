@@ -46,15 +46,12 @@ def heartbeat():
 def poll():
     login=clean_login(request.args.get("login")); dev=str(request.args.get("device_id",""))[:100]
     if len(login)<2 or not dev:return jsonify(ok=False),400
-    deadline=time.time()+20
-    while time.time()<deadline:
-        with LOCK:
-            d=room(login)["devices"].setdefault(dev,{"seen":0,"queue":[]})
-            d["seen"]=time.time()
-            if d["queue"]:
-                c=d["queue"][0]
-                return jsonify(ok=True,id=c["id"],command=c["command"])
-        time.sleep(.08)
+    with LOCK:
+        d=room(login)["devices"].setdefault(dev,{"seen":0,"queue":[]})
+        d["seen"]=time.time()
+        if d["queue"]:
+            c=d["queue"][0]
+            return jsonify(ok=True,id=c["id"],command=c["command"])
     return jsonify(ok=True,id=0,command="")
 
 @app.post("/api/ack")
@@ -84,6 +81,17 @@ def status():
     if len(login)<2:return jsonify(ok=True,online=0)
     with LOCK:n=len(online_devices(room(login)))
     return jsonify(ok=True,online=n)
+ 
+@app.get("/api/devices")
+def devices():
+    login=clean_login(request.args.get("login"))
+    if len(login)<2:return jsonify(ok=True,devices=[])
+    now=time.time()
+    with LOCK:
+        items=[{"id":dev[-6:].upper(),"online":now-float(d.get("seen",0))<=ONLINE_SECONDS}
+               for dev,d in room(login)["devices"].items()
+               if now-float(d.get("seen",0))<=60]
+    return jsonify(ok=True,devices=items)
 
 if __name__=="__main__":
     app.run(host="0.0.0.0",port=int(os.environ.get("PORT",10000)))
